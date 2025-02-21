@@ -1,9 +1,8 @@
 import {
-  forwardRef,
-  MutableRefObject,
+  RefObject,
   useEffect,
   useLayoutEffect,
-  useRef,
+  useRef
 } from "react";
 import Quill, { Range } from "quill";
 import Delta from "quill-delta";
@@ -14,59 +13,55 @@ interface EditorProps {
   defaultValue: Delta;
   onTextChange: (delta: Delta) => void;
   onSelectionChange: (range: Range) => void;
+  ref: RefObject<Quill|null>
 }
 
-export const Editor = forwardRef<Quill, EditorProps>(
-  (
-    { readOnly, defaultValue, onTextChange, onSelectionChange }: EditorProps,
-    ref,
-  ) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const defaultValueRef = useRef(defaultValue);
-    const onTextChangeRef = useRef(onTextChange);
-    const onSelectionChangeRef = useRef(onSelectionChange);
+export function Editor({readOnly, defaultValue, onTextChange, onSelectionChange, ref}:EditorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const defaultValueRef = useRef(defaultValue);
+  const onTextChangeRef = useRef(onTextChange);
+  const onSelectionChangeRef = useRef(onSelectionChange);
 
-    useLayoutEffect(() => {
-      onTextChangeRef.current = onTextChange;
-      onSelectionChangeRef.current = onSelectionChange;
+  useLayoutEffect(() => {
+    onTextChangeRef.current = onTextChange;
+    onSelectionChangeRef.current = onSelectionChange;
+  });
+
+  useEffect(() => {
+    ref.current?.enable(!readOnly);
+  }, [ref, readOnly]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const editorContainer = container?.appendChild(
+      container.ownerDocument.createElement("div"),
+    );
+    if (!editorContainer) return;
+    const quill = new Quill(editorContainer, {
+      theme: "snow",
     });
 
-    useEffect(() => {
-      (ref as MutableRefObject<Quill>).current?.enable(!readOnly);
-    }, [ref, readOnly]);
+    ref.current = quill;
 
-    useEffect(() => {
-      const container = containerRef.current;
-      const editorContainer = container?.appendChild(
-        container.ownerDocument.createElement("div"),
-      );
-      if (!editorContainer) return;
-      const quill = new Quill(editorContainer, {
-        theme: "snow",
-      });
+    if (defaultValueRef.current) {
+      quill.setContents(defaultValueRef.current);
+    }
 
-      (ref as MutableRefObject<Quill>).current = quill;
+    quill.on(Quill.events.TEXT_CHANGE, (delta: Delta) => {
+      onTextChangeRef.current?.(delta);
+    });
 
-      if (defaultValueRef.current) {
-        quill.setContents(defaultValueRef.current);
+    quill.on(Quill.events.SELECTION_CHANGE, (range: Range) => {
+      onSelectionChangeRef.current?.(range);
+    });
+
+    return () => {
+      ref.current = null;
+      if (container) {
+        container.innerHTML = "";
       }
+    };
+  }, [ref]);
 
-      quill.on(Quill.events.TEXT_CHANGE, (delta: Delta) => {
-        onTextChangeRef.current?.(delta);
-      });
-
-      quill.on(Quill.events.SELECTION_CHANGE, (range: Range) => {
-        onSelectionChangeRef.current?.(range);
-      });
-
-      return () => {
-        (ref as MutableRefObject<Quill | null>).current = null;
-        if (container) {
-          container.innerHTML = "";
-        }
-      };
-    }, [ref]);
-
-    return <div ref={containerRef}></div>;
-  },
-);
+  return <div ref={containerRef}></div>;
+}
